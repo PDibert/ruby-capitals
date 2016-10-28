@@ -2,6 +2,8 @@ require 'json'
 require 'csv'
 require 'rest-client'
 require 'levenshtein'
+require 'pry'
+require 'pp'
 
 class Quiz
 
@@ -17,8 +19,44 @@ class Quiz
     end
   end
 
+  def load_populations()
+    binding.pry
+    file = File.read('populations_to_countries.json')
+    data_hash = JSON.parse(file)
+    #go through the list of countries, get the populationIO name, call the api, and add to an array
+      population_data = []
+      (1..10).each do |n|
+     country = data_hash[n].fetch("populationIoName").gsub(/ /, '%20')
+     iso = data_hash[n].fetch("iso2Code")
+    @pop_url = "http://api.population.io:80/1.0/population/#{country}/2015-12-24/"
+    begin
+     response = RestClient.get @pop_url
+    rescue => e
+      e.response
+     end
+    json_response = JSON.parse(response)
+    json_response.merge!("iso2Code"=> iso)
+      population_data << json_response
+    end
+
+    pp population_data.zip(country_data).collect { |array| array.inject(&:merge) }
+
+    country_info_and_stats = population_data + country_data
+country_info_and_stats.group_by {|x| x[:iso2Code]}.map do |k,v|
+  v.inject(:merge)
+     end
+
+  p population_data.zip(country_data).map{|h1,h2| h1["iso2Code"] == h2["iso2Code"] ? h1.merge(h2) : [h1 ,h2]}.flatten
+end
+  end
+
+  def load_both_data_sets()
+   load_populations()
+  end
+
   # display question based on data
   def answer_question(data)
+    binding.pry
     country = data["name"]
     capital = data["capitalCity"]
     unless capital == ""
@@ -59,7 +97,8 @@ end
     questions_asked = 0
     questions_right = 0
     counter = 0
-    country_data = load_data()
+    full_data_set = load_both_data_sets()
+    #country_data = load_data()
     # go forever
     while 1==1
       rand_index = rand(country_data.length-1)
